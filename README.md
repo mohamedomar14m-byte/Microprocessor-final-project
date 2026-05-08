@@ -1,112 +1,104 @@
-#include <Wire.h>
-#include <LiquidCrystal_I2C.h> #include <SoftwareSerial.h> #include <DHT.h>
-// ===== LCD =====
-LiquidCrystal_I2C lcd(0x27, 16, 2);
-// ===== Bluetooth ===== SoftwareSerial BT(10, 11);
-// ===== DHT =====
-#define DHTPIN 4
-#define DHTTYPE DHT11 DHT dht(DHTPIN, DHTTYPE);
-// ===== Pins ===== const int LDR = A0; const int GAS = A1; const int PIR = 2; const int BUZZER = 9; const int LED = 13;
-// ===== State =====
-enum State { SAFE, WARNING, ALERT };
-State currentState = SAFE;
-// ===== Variables ===== float temp = 0;
-float hum = 0;
-unsigned long lastDHT = 0; unsigned long lastScreen = 0;
-int screenPage = 0;
-// ===== Thresholds ===== int GAS_LIMIT = 350;
-int TEMP_LIMIT = 30; int LIGHT_LIMIT = 400;
-// ===== Bluetooth Control ===== bool systemEnabled = true;
-bool alarmMuted = false;
-// ===== Setup ===== void setup() { Serial.begin(9600); BT.begin(9600);
-lcd.init(); lcd.backlight(); dht.begin();
-pinMode(PIR, INPUT); pinMode(LED, OUTPUT); pinMode(BUZZER, OUTPUT);
-lcd.print("SMART SYSTEM"); delay(1500);
-lcd.clear();
-}
-// ===== Loop ===== void loop() {
-// ===== Bluetooth Commands ===== if (BT.available()) {
-char cmd = BT.read();
-if (cmd == '0') { systemEnabled = false; BT.println("SYSTEM OFF");
-}
-else if (cmd == '1') { BT.println("RESET..."); delay(200);
-void(* resetFunc) (void) = 0; resetFunc();
-}
-else if (cmd == '2') { alarmMuted = true; BT.println("ALARM MUTED");
-}
-else if (cmd == '3') { alarmMuted = false; BT.println("ALARM ON");
-}
-}
-// ===== System OFF ===== if (!systemEnabled) { lcd.clear(); lcd.setCursor(0,0); lcd.print("SYSTEM OFF");
-digitalWrite(LED, LOW); digitalWrite(BUZZER, LOW);
-delay(500); return;
-}
-unsigned long now = millis();
-// ===== DHT =====
-if (now - lastDHT >= 2000) { lastDHT = now;
-float t = dht.readTemperature(); float h = dht.readHumidity();
-if (!isnan(t) && !isnan(h)) { temp = t;
-hum = h;
-}
-}
-// ===== Sensors =====
-int gas = analogRead(GAS); int light = analogRead(LDR); int motion = digitalRead(PIR);
-// ===== Conditions =====
-bool gasAlert = gas >= GAS_LIMIT; bool tempAlert = temp >= TEMP_LIMIT; bool lightAlert = light < LIGHT_LIMIT; bool motionAlert = motion == HIGH;
-// ===== State Logic =====
-if (gasAlert || tempAlert || (motionAlert && lightAlert)) { currentState = ALERT;
-}
-else if (gas >= GAS_LIMIT - 50 || temp >= TEMP_LIMIT - 3) { currentState = WARNING;
-}
-else {
-currentState = SAFE;
-}
-// ===== Screen Pages ===== if (now - lastScreen >= 2000) { screenPage++;
-if (screenPage > 2) screenPage = 0; lastScreen = now;
-}
-lcd.clear();
-// ===== ALERT =====
-if (currentState == ALERT) { lcd.setCursor(0, 0); lcd.print("!!! ALERT !!!");
-lcd.setCursor(0, 1);
-if (gasAlert && tempAlert) { lcd.print("Gas+Temp High");
-}
-else if (gasAlert) { lcd.print("Gas High");
-}
-else if (tempAlert) { lcd.print("Temp High");
-}
-else { lcd.print("Motion+Dark");
-}
-digitalWrite(LED, HIGH); if (!alarmMuted) {
-digitalWrite(BUZZER, HIGH);
-} else {
-digitalWrite(BUZZER, LOW);
-}
-}
-// ===== WARNING =====
-else if (currentState == WARNING) { lcd.setCursor(0, 0); lcd.print("WARNING");
-lcd.setCursor(0, 1);
-if (gas >= GAS_LIMIT - 50 && temp >= TEMP_LIMIT - 3) { lcd.print("Gas+Temp Rise");
-}
-else if (gas >= GAS_LIMIT - 50) { lcd.print("Gas Rising");
-}
-else {
-lcd.print("Temp Rising");
-}
-digitalWrite(LED, HIGH); digitalWrite(BUZZER, LOW);
-}
-// ===== SAFE =====
-else {
-digitalWrite(LED, LOW); digitalWrite(BUZZER, LOW);
-if (screenPage == 0) { lcd.setCursor(0, 0); lcd.print("Temp:"); lcd.print(temp, 1);
-lcd.setCursor(0, 1); lcd.print("Hum:"); lcd.print(hum, 0);
-}
-else if (screenPage == 1) { lcd.setCursor(0, 0); lcd.print("Gas:"); lcd.print(gas);
-lcd.setCursor(0, 1); lcd.print("Light:"); lcd.print(light);
-}
-else { lcd.setCursor(0, 0); lcd.print("Motion:"); lcd.print(motion);
-lcd.setCursor(0, 1); lcd.print("SAFE MODE");
-}
-}
-// ===== Bluetooth Data ===== BT.print("State:"); BT.print(currentState); BT.print(",Gas:"); BT.print(gas); BT.print(",Temp:"); BT.print(temp); BT.print(",Light:"); BT.print(light); BT.print(",Motion:"); BT.println(motion);
-delay(3000);
-}
+ELECTRICAL AND ELECTRONICS ENGINEERING DEPARTMENT
+Lab Report
+EEE 308 (1) Microprocessors
+Spring 2026-2027
+THIS PROJECT PREPARED BY MOHAMED OMAR OSMAN
+ID / 210202987
+
+SAQR ALFAKIH ID/210202995
+
+	Smart Home Security System 
+
+•	 Introduction
+This project is a smart home security system that was created using many sensors and an Arduino. The system keeps an eye on temperature, humidity, gas and smoke levels, movements, and darkness. It uses a buzzer, LED, LCD screen, and Bluetooth mobile application to notify the user.
+By identifying hazardous situations including gas leaks, smoke, high temperatures, and movements in the dark, the initiative increases house safety.
+
+ 
+•	Project goals
+o	The primary goals of this initiative are:
+o	To detect motion with a PIR motion sensor.
+o	To detect darkness with an LDR sensor.
+o	To activate a lamp/LED when darkness is sensed.
+o	To detect gas or smoke with a MQ2 sensor.
+o	Use a DHT11 sensor to detect temperature and humidity.
+o	To sound a buzzer in perilous situations.
+o	To show sensor readings on an LCD panel.
+o	Use Bluetooth to communicate sensor data to a mobile phone.
+o	To operate the system using the Serial Bluetooth Terminal app.
+
+•	 Components Used
+
+•	
+Component	Function
+Arduino	Main controller of the system
+PIR Motion Sensor	Detects movement
+LDR Sensor	Detects light/darkness
+MQ2 Gas Sensor	Detects gas and smoke
+DHT11 Sensor	Measures temperature and humidity
+Buzzer	Gives alarm sound
+LED / Lamp	Indicates danger or darkness
+LCD I2C
+Screen	Displays system data
+Bluetooth Module	Sends data to phone and receives commands
+Jumper Wires	Connections
+Breadboard	Circuit testing
+
+
+•	 System Description.
+o	The smart security system continually reads data from the linked sensors. The Arduino evaluates the readings and determines if the condition is safe,
+ 
+warning, or dangerous.
+o	The system contains three major states:
+1.	SAFE State.
+o	The system is normal. There is no threat identified. The LCD screen shows temperature, humidity, gas level, light level, and motion status.
+2.	Warning State
+o	The gas level or temperature is near to the danger zone. The LED goes on, but the buzzer stays off.
+3.	ALERT State.
+o	A serious situation has been found. The buzzer sounds unless it is silenced in the Bluetooth app.
+o	Alerts occur when:
+o	The gas level is high.
+o	The temperature is high.
+o	Motion is sensed in the dark.
+
+
+•	. Sensors and Functions
+PIR motion sensor
+The PIR sensor detects human movement. In this project, motion becomes harmful when it occurs in the darkness.
+LDR darkness sensor
+The LDR sensor senses the light level. If the light value is less than the threshold, the system considers the environment dark.
+MQ2 Gas and Smoke Sensor
+The MQ2 sensor can detect gas or smoke. If the reading equals or exceeds the gas limit, the system enters alarm mode.
+The DHT11 temperature and humidity sensor
+Every 2 seconds, the DHT11 sensor measures the temperature and humidity. If the temperature rises above the set point, the buzzer sounds.
+Threshold values used. Gas Limit: 350
+The temperature limit is 30°C. Light Limit: 400
+ 
+•	Bluetooth Application Control
+o	The system is linked to the Serial Bluetooth Terminal app.
+o	The user can operate the system with numbers:
+Number	Function
+0	Turns off the entire
+system
+1	Restarts the system
+2	Turns off / mutes the
+buzzer
+3	Turns on the buzzer
+again
+
+
+•	LCD Display.
+
+o	Every two seconds, the LCD panel displays a different page.
+o	Page 1 shows the temperature and humidity.
+o	Page 2 shows gas and light readings.
+o	Page 3 shows motion status and safety mode.
+o	In alert mode, the screen indicates the danger kind.
+
+
+
+
+•	Conclusion.
+This project effectively installs an Arduino-based smart home security and monitoring system. It can detect motion, darkness, gas/smoke, temperature, and humidity. The system notifies the user via a buzzer, LED, LCD screen, and Bluetooth mobile app.
+
+The Bluetooth control makes the system more interactive by allowing the user to switch it off, restart it, silence the alarm, or activate it again. Overall, this project is helpful, practical, and applicable to home safety applications.
+
